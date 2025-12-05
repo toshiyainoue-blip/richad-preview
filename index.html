@@ -15,6 +15,7 @@
       margin: auto;
       background: #fff;
       border: 1px solid #ccc;
+      min-height: 200px;
     }
   </style>
 </head>
@@ -31,18 +32,21 @@ if (code) {
   const html = decodeURIComponent(code);
   const container = document.getElementById("preview");
 
-  // 一旦HTMLだけ入れる（script抜き）
+  // 一旦HTMLをDOM化
   const temp = document.createElement("div");
   temp.innerHTML = html;
 
-  // scriptだけ別途ロード
+  // scriptだけを「そのまま」再生成（補完・改変なし）
   const scripts = temp.querySelectorAll("script");
+
   scripts.forEach(oldScript => {
     const s = document.createElement("script");
 
     // srcあり
     if (oldScript.src) {
       s.src = oldScript.src;
+
+      // ★ すべての属性をそのままコピー（補完しない）
       Array.from(oldScript.attributes).forEach(attr => {
         if (attr.name !== "src") {
           s.setAttribute(attr.name, attr.value);
@@ -55,9 +59,9 @@ if (code) {
     }
 
     document.body.appendChild(s);
-    oldScript.remove();
   });
 
+  // HTML本体を反映
   container.appendChild(temp);
 }
 </script>
