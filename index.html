@@ -28,8 +28,37 @@ const params = new URLSearchParams(location.search);
 const code = params.get("code");
 
 if (code) {
-  document.getElementById("preview").innerHTML =
-    decodeURIComponent(code);
+  const html = decodeURIComponent(code);
+  const container = document.getElementById("preview");
+
+  // 一旦HTMLだけ入れる（script抜き）
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+
+  // scriptだけ別途ロード
+  const scripts = temp.querySelectorAll("script");
+  scripts.forEach(oldScript => {
+    const s = document.createElement("script");
+
+    // srcあり
+    if (oldScript.src) {
+      s.src = oldScript.src;
+      Array.from(oldScript.attributes).forEach(attr => {
+        if (attr.name !== "src") {
+          s.setAttribute(attr.name, attr.value);
+        }
+      });
+    } 
+    // インラインscript
+    else {
+      s.textContent = oldScript.textContent;
+    }
+
+    document.body.appendChild(s);
+    oldScript.remove();
+  });
+
+  container.appendChild(temp);
 }
 </script>
 
