@@ -32,37 +32,29 @@ if (code) {
   const html = decodeURIComponent(code);
   const container = document.getElementById("preview");
 
-  // 一旦HTMLをDOM化
-  const temp = document.createElement("div");
-  temp.innerHTML = html;
+  // まずそのままHTMLごと流し込む（この時点では <script> は動かない）
+  container.innerHTML = html;
 
-  // scriptだけを「そのまま」再生成（補完・改変なし）
-  const scripts = temp.querySelectorAll("script");
+  // container 内の <script> を全部取り出して「同じ場所に差し替え」
+  const scripts = container.querySelectorAll("script");
 
   scripts.forEach(oldScript => {
-    const s = document.createElement("script");
+    const newScript = document.createElement("script");
+    newScript.async = false; // 可能な限り元の順番で実行させたい
 
-    // srcあり
-    if (oldScript.src) {
-      s.src = oldScript.src;
+    // 属性をすべてコピー（src含む）
+    Array.from(oldScript.attributes).forEach(attr => {
+      newScript.setAttribute(attr.name, attr.value);
+    });
 
-      // ★ すべての属性をそのままコピー（補完しない）
-      Array.from(oldScript.attributes).forEach(attr => {
-        if (attr.name !== "src") {
-          s.setAttribute(attr.name, attr.value);
-        }
-      });
-    } 
-    // インラインscript
-    else {
-      s.textContent = oldScript.textContent;
+    // インラインスクリプトなら中身もコピー
+    if (!oldScript.src) {
+      newScript.textContent = oldScript.textContent;
     }
 
-    document.body.appendChild(s);
+    // oldScript と置き換え（DOMの場所・順番を維持）
+    oldScript.parentNode.replaceChild(newScript, oldScript);
   });
-
-  // HTML本体を反映
-  container.appendChild(temp);
 }
 </script>
 
