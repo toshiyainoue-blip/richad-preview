@@ -1,74 +1,40 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>リッチアド テスト環境</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 20px;
-      background: #eee;
-      font-family: sans-serif;
-    }
-    #preview {
-      width: 375px;
-      margin: auto;
-      background: #fff;
-      border: 1px solid #ccc;
-      min-height: 200px;
-    }
-    /* .scroll_image_wrapper {
-      width: 375px;
-      height: 200px;
-      overflow: scroll;
-    } */
-    
-    /* .scroll_image_wrapper img,
-    .scroll_image_wrapper video {
-      width: 600px;   /* 親より大きくする 
-      height: auto;
-    } */
+<style>
+  #previewFrame {
+    width: 375px;              /* 表示したい枠 */
+    margin: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    overflow: hidden;
+  }
 
-  </style>
-</head>
-<body>
+  /* 中身(広告)の“基準サイズ” */
+  #adStage {
+    width: 300px;
+    height: 600px;
+    transform-origin: top left;
+  }
+</style>
 
-<h3>リッチアド プレビュー</h3>
-<div id="preview"></div>
+<div id="previewFrame">
+  <div id="adStage"></div>
+</div>
 
 <script>
-const params = new URLSearchParams(location.search);
-const code = params.get("code");
+  function fitScale() {
+    const frame = document.getElementById("previewFrame");
+    const stage = document.getElementById("adStage");
 
-if (code) {
-  const html = decodeURIComponent(code);
-  const container = document.getElementById("preview");
+    // 広告の想定サイズ（classから拾うのも可）
+    const baseW = 300;
+    const baseH = 600;
 
-  // まずそのままHTMLごと流し込む（この時点では <script> は動かない）
-  container.innerHTML = html;
+    // frame幅に合わせて縮尺
+    const scale = frame.clientWidth / baseW;
 
-  // container 内の <script> を全部取り出して「同じ場所に差し替え」
-  const scripts = container.querySelectorAll("script");
+    stage.style.transform = `scale(${scale})`;
+    frame.style.height = `${baseH * scale}px`;
+  }
 
-  scripts.forEach(oldScript => {
-    const newScript = document.createElement("script");
-    newScript.async = false; // 可能な限り元の順番で実行させたい
-
-    // 属性をすべてコピー（src含む）
-    Array.from(oldScript.attributes).forEach(attr => {
-      newScript.setAttribute(attr.name, attr.value);
-    });
-
-    // インラインスクリプトなら中身もコピー
-    if (!oldScript.src) {
-      newScript.textContent = oldScript.textContent;
-    }
-
-    // oldScript と置き換え（DOMの場所・順番を維持）
-    oldScript.parentNode.replaceChild(newScript, oldScript);
-  });
-}
+  // 注入後・リサイズ時にフィット
+  window.addEventListener("resize", fitScale);
 </script>
-
-</body>
-</html>
