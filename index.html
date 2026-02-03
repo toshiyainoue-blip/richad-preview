@@ -1,8 +1,7 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
   <title>リッチアド テスト環境</title>
   <style>
     body {
@@ -17,156 +16,58 @@
       background: #fff;
       border: 1px solid #ccc;
       min-height: 200px;
-      overflow: hidden;
     }
-    .hint {
+    /* .scroll_image_wrapper {
       width: 375px;
-      margin: 10px auto 0;
-      font-size: 12px;
-      color: #555;
-      line-height: 1.4;
-    }
-    code { background: #f6f6f6; padding: 2px 4px; border-radius: 4px; }
+      height: 200px;
+      overflow: scroll;
+    } */
+    
+    /* .scroll_image_wrapper img,
+    .scroll_image_wrapper video {
+      width: 600px;   /* 親より大きくする 
+      height: auto;
+    } */
+
   </style>
 </head>
 <body>
 
 <h3>リッチアド プレビュー</h3>
 <div id="preview"></div>
-<div class="hint">
-  URL例: <code>?code=（スプレッドシートの ENCODEURL で渡したHTML）</code><br>
-  ※ <code>link rel="stylesheet"</code> は head に移して読み込み完了を待ってから script を順番実行します。
-</div>
 
 <script>
-/**
- * 目的：
- * - ?code= で渡された任意HTMLを #preview に表示
- * - container内の <link rel="stylesheet"> を head に移してCSS読み込みを待つ
- * - container内の <script> を「順番に」ロード/実行する（外部scriptは onload 待ち）
- * - 同一 src/href の二重読み込みを避ける
- */
+const params = new URLSearchParams(location.search);
+const code = params.get("code");
 
-function alreadyLoadedCss(href) {
-  try {
-    return !!document.querySelector(`link[rel="stylesheet"][href="${CSS.escape(href)}"]`);
-  } catch {
-    return Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some(l => l.href === href);
-  }
-}
-
-function alreadyLoadedScript(src) {
-  try {
-    return !!document.querySelector(`script[src="${CSS.escape(src)}"]`);
-  } catch {
-    return Array.from(document.querySelectorAll("script")).some(s => s.src === src);
-  }
-}
-
-function moveStylesheetsToHead(container) {
-  const links = Array.from(container.querySelectorAll('link[rel="stylesheet"]'));
-  const promises = [];
-
-  links.forEach(oldLink => {
-    const href = oldLink.getAttribute("href");
-    if (href && !alreadyLoadedCss(href)) {
-      const newLink = document.createElement("link");
-      Array.from(oldLink.attributes).forEach(attr => newLink.setAttribute(attr.name, attr.value));
-      document.head.appendChild(newLink);
-
-      // CSS読み込み完了待ち
-      promises.push(new Promise((resolve, reject) => {
-        newLink.onload = () => resolve({ href, ok: true });
-        newLink.onerror = () => reject(new Error("Failed to load CSS: " + href));
-      }));
-    }
-    oldLink.remove();
-  });
-
-  // 失敗しても先に進めたいので allSettled
-  return Promise.allSettled(promises);
-}
-
-function moveInlineStylesToHead(container) {
-  // <style> を head に移す（任意。CSSの当たり方を安定させるため）
-  const styles = Array.from(container.querySelectorAll("style"));
-  styles.forEach(oldStyle => {
-    const newStyle = document.createElement("style");
-    newStyle.textContent = oldStyle.textContent || "";
-    document.head.appendChild(newStyle);
-    oldStyle.remove();
-  });
-}
-
-function executeScriptsInOrder(container) {
-  const scripts = Array.from(container.querySelectorAll("script"));
-
-  return scripts.reduce((p, oldScript) => {
-    return p.then(() => new Promise((resolve, reject) => {
-      const src = oldScript.getAttribute("src");
-
-      if (src) {
-        // 既に同じsrcがあるならスキップ（ただし oldScript は消す）
-        if (alreadyLoadedScript(src)) {
-          oldScript.remove();
-          return resolve();
-        }
-
-        const newScript = document.createElement("script");
-        newScript.async = false;
-
-        // 属性コピー（data-xxx / name など含む）
-        Array.from(oldScript.attributes).forEach(attr => {
-          newScript.setAttribute(attr.name, attr.value);
-        });
-
-        newScript.onload = () => resolve();
-        newScript.onerror = () => reject(new Error("Failed to load script: " + src));
-
-        // head に追加する方が安定
-        document.head.appendChild(newScript);
-        oldScript.remove();
-      } else {
-        // inline script：置き換えて即実行
-        const newScript = document.createElement("script");
-        newScript.async = false;
-
-        Array.from(oldScript.attributes).forEach(attr => {
-          newScript.setAttribute(attr.name, attr.value);
-        });
-
-        newScript.textContent = oldScript.textContent || "";
-        oldScript.parentNode.replaceChild(newScript, oldScript);
-        resolve();
-      }
-    }));
-  }, Promise.resolve());
-}
-
-(function main() {
-  const params = new URLSearchParams(location.search);
-  const code = params.get("code");
-
-  if (!code) return;
-
-  // 重要：
-  // - スプレッドシート側は ENCODEURL(D2) で渡している
-  // - URLSearchParams.get() は基本「デコード済み」を返すため、ここで decodeURIComponent はしない
-  const html = code;
-
+if (code) {
+  const html = decodeURIComponent(code);
   const container = document.getElementById("preview");
+
+  // まずそのままHTMLごと流し込む（この時点では <script> は動かない）
   container.innerHTML = html;
 
-  // link/style は head に移してから、CSS読み込み完了を待って script 実行
-  moveInlineStylesToHead(container);
+  // container 内の <script> を全部取り出して「同じ場所に差し替え」
+  const scripts = container.querySelectorAll("script");
 
-  moveStylesheetsToHead(container)
-    .then(() => executeScriptsInOrder(container))
-    .catch(err => {
-      // どこかが落ちても、原因が追えるようにconsoleへ
-      console.error(err);
+  scripts.forEach(oldScript => {
+    const newScript = document.createElement("script");
+    newScript.async = false; // 可能な限り元の順番で実行させたい
+
+    // 属性をすべてコピー（src含む）
+    Array.from(oldScript.attributes).forEach(attr => {
+      newScript.setAttribute(attr.name, attr.value);
     });
-})();
+
+    // インラインスクリプトなら中身もコピー
+    if (!oldScript.src) {
+      newScript.textContent = oldScript.textContent;
+    }
+
+    // oldScript と置き換え（DOMの場所・順番を維持）
+    oldScript.parentNode.replaceChild(newScript, oldScript);
+  });
+}
 </script>
 
 </body>
