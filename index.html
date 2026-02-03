@@ -16,19 +16,8 @@
       background: #fff;
       border: 1px solid #ccc;
       min-height: 200px;
+      overflow: hidden;
     }
-    /* .scroll_image_wrapper {
-      width: 375px;
-      height: 200px;
-      overflow: scroll;
-    } */
-    
-    /* .scroll_image_wrapper img,
-    .scroll_image_wrapper video {
-      width: 600px;   /* 親より大きくする 
-      height: auto;
-    } */
-
   </style>
 </head>
 <body>
@@ -37,36 +26,76 @@
 <div id="preview"></div>
 
 <script>
+function alreadyLoadedScript(src) {
+  return !!document.querySelector(`script[src="${CSS.escape(src)}"]`);
+}
+function alreadyLoadedCss(href) {
+  return !!document.querySelector(`link[rel="stylesheet"][href="${CSS.escape(href)}"]`);
+}
+
 const params = new URLSearchParams(location.search);
 const code = params.get("code");
 
 if (code) {
-  const html = decodeURIComponent(code);
+  const html = code; // ← ENCODEURLで渡してるなら基本これでOK
   const container = document.getElementById("preview");
-
-  // まずそのままHTMLごと流し込む（この時点では <script> は動かない）
   container.innerHTML = html;
 
-  // container 内の <script> を全部取り出して「同じ場所に差し替え」
-  const scripts = container.querySelectorAll("script");
-
-  scripts.forEach(oldScript => {
-    const newScript = document.createElement("script");
-    newScript.async = false; // 可能な限り元の順番で実行させたい
-
-    // 属性をすべてコピー（src含む）
-    Array.from(oldScript.attributes).forEach(attr => {
-      newScript.setAttribute(attr.name, attr.value);
-    });
-
-    // インラインスクリプトなら中身もコピー
-    if (!oldScript.src) {
-      newScript.textContent = oldScript.textContent;
+  // ① link[rel=stylesheet] は head に移して確実に効かせる
+  const links = Array.from(container.querySelectorAll('link[rel="stylesheet"]'));
+  links.forEach(oldLink => {
+    const href = oldLink.getAttribute("href");
+    if (href && !alreadyLoadedCss(href)) {
+      const newLink = document.createElement("link");
+      Array.from(oldLink.attributes).forEach(attr => newLink.setAttribute(attr.name, attr.value));
+      document.head.appendChild(newLink);
     }
-
-    // oldScript と置き換え（DOMの場所・順番を維持）
-    oldScript.parentNode.replaceChild(newScript, oldScript);
+    oldLink.remove();
   });
+
+  const scripts = Array.from(container.querySelectorAll("script"));
+
+  // ② 外部scriptを順番にロード（onload待ち）＋重複読み込み防止
+  const loadInOrder = scripts.reduce((p, oldScript) => {
+    return p.then(() => new Promise((resolve, reject) => {
+      const src = oldScript.getAttribute("src");
+
+      if (src) {
+        // 既に同じsrcが読み込まれてるならスキップ
+        if (alreadyLoadedScript(src)) {
+          oldScript.remove();
+          return resolve();
+        }
+
+        const newScript = document.createElement("script");
+        newScript.async = false;
+
+        Array.from(oldScript.attributes).forEach(attr => {
+          newScript.setAttribute(attr.name, attr.value);
+        });
+
+        newScript.onload = () => resolve();
+        newScript.onerror = () => reject(new Error("Failed to load: " + src));
+
+        document.head.appendChild(newScript);
+        oldScript.remove();
+      } else {
+        // inline script
+        const newScript = document.createElement("script");
+        newScript.async = false;
+
+        Array.from(oldScript.attributes).forEach(attr => {
+          newScript.setAttribute(attr.name, attr.value);
+        });
+
+        newScript.textContent = oldScript.textContent;
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+        resolve();
+      }
+    }));
+  }, Promise.resolve());
+
+  loadInOrder.catch(err => console.error(err));
 }
 </script>
 
